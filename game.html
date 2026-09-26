@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Layer Ear · 分层听音训练</title>
+<style>
+:root{
+  --bg:#07070b;
+  --kick:#ff5a3c; --snare:#3cc9ff; --hat:#ffd23c; --bass:#a35bff; --melody:#3cff8f;
+  --text:#eceef2; --dim:#83879a;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden;}
+#glow{position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at 50% 15%, rgba(163,91,255,.18), transparent 55%),
+             radial-gradient(ellipse at 50% 100%, rgba(60,201,255,.12), transparent 60%);
+  animation:pulse 0.5s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:.6}50%{opacity:1}}
+#app{position:relative;z-index:1;display:flex;flex-direction:column;height:100%;max-width:560px;margin:0 auto;}
+
+header{padding:14px 16px 8px;display:flex;justify-content:space-between;align-items:baseline;flex-shrink:0;}
+header h1{font-size:17px;margin:0;font-weight:700;letter-spacing:.3px;
+  background:linear-gradient(90deg,var(--melody),var(--bass));-webkit-background-clip:text;background-clip:text;color:transparent;}
+#stats{font-size:13px;color:var(--dim);text-align:right;}
+#stats b{color:var(--text);font-size:16px;}
+
+#field{flex:1;position:relative;display:flex;overflow:hidden;gap:3px;padding:0 8px;}
+.lane{flex:1;position:relative;border-radius:10px;background:rgba(255,255,255,.02);overflow:hidden;}
+.lane::after{content:'';position:absolute;inset:0;opacity:0;transition:opacity .12s;pointer-events:none;}
+.lane[data-lane="0"]::after{background:radial-gradient(ellipse at 50% 82%,var(--kick),transparent 70%);}
+.lane[data-lane="1"]::after{background:radial-gradient(ellipse at 50% 82%,var(--snare),transparent 70%);}
+.lane[data-lane="2"]::after{background:radial-gradient(ellipse at 50% 82%,var(--hat),transparent 70%);}
+.lane[data-lane="3"]::after{background:radial-gradient(ellipse at 50% 82%,var(--bass),transparent 70%);}
+.lane[data-lane="4"]::after{background:radial-gradient(ellipse at 50% 82%,var(--melody),transparent 70%);}
+.lane.flash::after{opacity:.55;}
+.hitline{position:absolute;bottom:70px;left:6px;right:6px;height:2px;background:rgba(255,255,255,.15);}
+.note{position:absolute;left:5px;right:5px;height:22px;border-radius:7px;top:-26px;filter:brightness(1.15);}
+.judge{position:absolute;bottom:80px;left:0;right:0;text-align:center;font-size:11px;font-weight:800;
+  letter-spacing:.5px;opacity:0;pointer-events:none;transition:opacity .15s;}
+
+#feedback{position:absolute;top:8px;left:0;right:0;text-align:center;font-size:12.5px;color:var(--dim);
+  pointer-events:none;z-index:2;}
+
+#styleRow{display:flex;gap:6px;padding:2px 16px 8px;flex-shrink:0;overflow-x:auto;}
+.style-btn{flex-shrink:0;padding:7px 14px;font-size:12px;font-weight:700;border-radius:999px;
+  border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);color:var(--dim);font-family:inherit;}
+.style-btn.on{background:linear-gradient(90deg,var(--melody),var(--bass));color:#07070b;border-color:transparent;}
+
+#muteRow{display:flex;gap:6px;padding:8px 16px 4px;flex-shrink:0;}
+.mute{flex:1;padding:6px 0;font-size:10.5px;font-weight:800;border-radius:8px;border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);color:var(--dim);font-family:inherit;letter-spacing:.3px;}
+.mute.on{color:#07070b;}
+.mute[data-lane="0"].on{background:var(--kick);box-shadow:0 0 14px -2px var(--kick);}
+.mute[data-lane="1"].on{background:var(--snare);box-shadow:0 0 14px -2px var(--snare);}
+.mute[data-lane="2"].on{background:var(--hat);box-shadow:0 0 14px -2px var(--hat);}
+.mute[data-lane="3"].on{background:var(--bass);box-shadow:0 0 14px -2px var(--bass);}
+.mute[data-lane="4"].on{background:var(--melody);box-shadow:0 0 14px -2px var(--melody);}
+.mute:not(.on){opacity:.45;}
+
+#pad{display:flex;flex-shrink:0;gap:6px;padding:6px 16px 10px;}
+.key{flex:1;aspect-ratio:1/0.82;border-radius:12px;border:none;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;font-family:inherit;font-weight:800;font-size:12px;color:#07070b;
+  background:var(--c); box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 0 rgba(0,0,0,0);
+  transition:transform .05s, box-shadow .1s, filter .1s; user-select:none;-webkit-user-select:none;}
+.key small{font-weight:700;opacity:.55;font-size:9.5px;margin-top:2px;}
+.key.pressed, .key:active{transform:translateY(2px) scale(.97);box-shadow:0 1px 0 rgba(0,0,0,.35);filter:brightness(1.35);}
+.key.autoflash{filter:brightness(1.25);box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 22px -2px var(--c);}
+#kick{--c:var(--kick);} #snare{--c:var(--snare);} #hat{--c:var(--hat);} #bass{--c:var(--bass);} #melody{--c:var(--melody);}
+
+#controls{display:flex;align-items:center;gap:10px;padding:2px 16px 14px;flex-shrink:0;font-size:12px;color:var(--dim);}
+#controls button{background:rgba(255,255,255,.04);color:var(--text);border:1px solid rgba(255,255,255,.1);
+  border-radius:9px;padding:7px 12px;font-size:12px;font-family:inherit;font-weight:600;}
+#controls button.on{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.25);}
+#controls .spacer{flex:1;}
+#bpmSlider{width:100px;accent-color:var(--bass);}
+</style>
+</head>
+<body>
+<div id="glow"></div>
+<div id="app">
+  <header>
+    <h1>Layer Ear</h1>
+    <div id="stats">连击 <b id="combo">0</b> · <span id="score">0</span> 分</div>
+  </header>
+
+  <div id="styleRow">
+    <button class="style-btn on" data-style="funk">Funk</button>
+    <button class="style-btn" data-style="trap">Trap</button>
+    <button class="style-btn" data-style="house">House</button>
+    <button class="style-btn" data-style="boombap">Boom Bap</button>
+  </div>
+
+  <div id="field">
+    <div id="feedback">点开始，跟着耳朵按对应层</div>
+    <div class="lane" data-lane="0"><div class="judge" id="j0"></div><div class="hitline"></div></div>
+    <div class="lane" data-lane="1"><div class="judge" id="j1"></div><div class="hitline"></div></div>
+    <div class="lane" data-lane="2"><div class="judge" id="j2"></div><div class="hitline"></div></div>
+    <div class="lane" data-lane="3"><div class="judge" id="j3"></div><div class="hitline"></div></div>
+    <div class="lane" data-lane="4"><div class="judge" id="j4"></div><div class="hitline"></div></div>
+  </div>
+
+  <div id="muteRow">
+    <button class="mute on" data-lane="0">KICK</button>
+    <button class="mute on" data-lane="1">SNARE</button>
+    <button class="mute on" data-lane="2">HI-HAT</button>
+    <button class="mute on" data-lane="3">BASS</button>
+    <button class="mute on" data-lane="4">MELODY</button>
+  </div>
+
+  <div id="pad">
+    <button class="key" id="kick"   data-lane="0">KICK<small>D</small></button>
+    <button class="key" id="snare"  data-lane="1">SNARE<small>F</small></button>
+    <button class="key" id="hat"    data-lane="2">HI-HAT<small>J</small></button>
+    <button class="key" id="bass"   data-lane="3">BASS<small>K</small></button>
+    <button class="key" id="melody" data-lane="4">LEAD<small>L</small></button>
+  </div>
+
+  <div id="controls">
+    <button id="playBtn">▶ 播放</button>
+    <button id="guideBtn" class="on">提示：开</button>
+    <span class="spacer"></span>
+    <input type="range" id="bpmSlider" min="60" max="160" step="1" value="100">
+    <span id="bpmLabel">100 bpm</span>
+  </div>
+</div>
+
+<script>
+const ctx = new (window.AudioContext||window.webkitAudioContext)();
+let master = ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+
+const LANE_PAN=[0,-0.35,0.35,0.1,-0.1];
+const laneChain=[0,1,2,3,4].map(i=>{
+  const g=ctx.createGain(), p=ctx.createStereoPanner();
+  p.pan.value=LANE_PAN[i]; g.connect(p); p.connect(master);
+  return g;
+});
+let laneMuted=[false,false,false,false,false];
+
+function kickSound(t){
+  const dest=laneChain[0], o=ctx.createOscillator(), g=ctx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(38,t+0.15);
+  g.gain.setValueAtTime(1,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.28);
+  o.connect(g); g.connect(dest); o.start(t); o.stop(t+0.3);
+}
+function noiseBuffer(dur){
+  const n=ctx.sampleRate*dur, buf=ctx.createBuffer(1,n,ctx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<n;i++) d[i]=Math.random()*2-1;
+  return buf;
+}
+function snareSound(t){
+  const dest=laneChain[1];
+  const src=ctx.createBufferSource(); src.buffer=noiseBuffer(0.2);
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1800;
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.9,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  src.connect(bp); bp.connect(g); g.connect(dest); src.start(t); src.stop(t+0.2);
+  const o=ctx.createOscillator(),g2=ctx.createGain(); o.type='triangle'; o.frequency.value=180;
+  g2.gain.setValueAtTime(0.5,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.1);
+  o.connect(g2); g2.connect(dest); o.start(t); o.stop(t+0.1);
+}
+function hatSound(t,open=false){
+  const dest=laneChain[2];
+  const src=ctx.createBufferSource(); src.buffer=noiseBuffer(open?0.25:0.06);
+  const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7000;
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.5,t); g.gain.exponentialRampToValueAtTime(0.001,t+(open?0.22:0.05));
+  src.connect(hp); hp.connect(g); g.connect(dest); src.start(t); src.stop(t+(open?0.25:0.06));
+}
+function bassSound(t,freq){
+  const dest=laneChain[3];
+  const o=ctx.createOscillator(), g=ctx.createGain(), f=ctx.createBiquadFilter();
+  o.type='sawtooth'; o.frequency.value=freq; f.type='lowpass'; f.frequency.value=1400; f.Q.value=4;
+  g.gain.setValueAtTime(0.65,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22);
+  o.connect(f); f.connect(g); g.connect(dest); o.start(t); o.stop(t+0.24);
+}
+function melodySound(t,freq){
+  const dest=laneChain[4];
+  const o=ctx.createOscillator(), o2=ctx.createOscillator(), g=ctx.createGain(), f=ctx.createBiquadFilter();
+  o.type='triangle'; o2.type='sine'; o.frequency.value=freq; o2.frequency.value=freq*2.01;
+  f.type='lowpass'; f.frequency.value=3200;
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.5,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+  o.connect(f); o2.connect(f); f.connect(g); g.connect(dest);
+  o.start(t); o.stop(t+0.36); o2.start(t); o2.stop(t+0.36);
+}
+const LANE_SOUND=[kickSound,snareSound,hatSound,null,null];
+const BASS_NOTES=[130.8,155.6,174.6,196.0];
+const MELODY_NOTES=[392.0,466.2,523.3,587.3,698.5]; // G4 Bb4 C5 D5 F5, minor pentatonic-ish lead
+
+const STYLES={
+  funk:{label:'Funk',bpm:100,swing:0.12,pattern:[
+    [0,4,8,11],[4,12],[0,2,4,6,7,8,10,12,14],[0,3,7,10],[2,9,13]]},
+  trap:{label:'Trap',bpm:140,swing:0,pattern:[
+    [0,6,10],[4,12],[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],[0,6,10],[3,11]]},
+  house:{label:'House',bpm:124,swing:0,pattern:[
+    [0,4,8,12],[4,12],[2,6,10,14],[0,2,4,6,8,10,12,14],[6,14]]},
+  boombap:{label:'Boom Bap',bpm:90,swing:0.18,pattern:[
+    [0,7,10],[4,12],[0,2,4,6,8,10,12,14],[0,7],[5,13]]}
+};
+let PATTERN=STYLES.funk.pattern, SWING=STYLES.funk.swing;
+const STEPS=16;
+let BPM=STYLES.funk.bpm, STEP_DUR=60/BPM/4;
+const LEAD=2.4;
+
+let running=false, nextStepTime=0, currentStep=0;
+let scheduled=[];
+const lookahead=0.1, interval=25;
+let timer=null;
+
+const laneEls=[...document.querySelectorAll('.lane')];
+const keyEls=[...document.querySelectorAll('.key')];
+
+function flashPad(lane, delayMs){
+  setTimeout(()=>{
+    laneEls[lane].classList.add('flash');
+    keyEls[lane].classList.add('autoflash');
+    setTimeout(()=>{ laneEls[lane].classList.remove('flash'); keyEls[lane].classList.remove('autoflash'); }, 110);
+  }, Math.max(0,delayMs));
+}
+
+function scheduleStep(step, time){
+  PATTERN.forEach((steps,lane)=>{
+    const idx = steps.indexOf(step);
+    if(idx===-1) return;
+    if(laneMuted[lane]) return;
+    if(lane===2){ hatSound(time, step===8); }
+    else if(lane===3){ bassSound(time, BASS_NOTES[idx%BASS_NOTES.length]); }
+    else if(lane===4){ melodySound(time, MELODY_NOTES[idx%MELODY_NOTES.length]); }
+    else { LANE_SOUND[lane](time); }
+    spawnNote(lane, time);
+    flashPad(lane, (time-ctx.currentTime)*1000);
+  });
+}
+function scheduler(){
+  while(nextStepTime < ctx.currentTime + lookahead){
+    const swungTime = nextStepTime + (currentStep%2===1 ? STEP_DUR*SWING : 0);
+    scheduleStep(currentStep, swungTime);
+    nextStepTime += STEP_DUR;
+    currentStep = (currentStep+1)%STEPS;
+  }
+}
+
+const fieldH=()=>document.getElementById('field').clientHeight;
+let guideOn=true;
+function spawnNote(lane, time){
+  if(!guideOn) return;
+  const el=document.createElement('div'); el.className='note';
+  el.style.background='var(--'+['kick','snare','hat','bass','melody'][lane]+')';
+  laneEls[lane].appendChild(el);
+  scheduled.push({lane, time, el, judged:false});
+}
+function animate(){
+  const now=ctx.currentTime, h=fieldH()-70;
+  scheduled.forEach(n=>{
+    const remain = n.time - now;
+    n.el.style.top = (h*(1-remain/LEAD))+'px';
+    if(remain < -0.18 && !n.judged){ n.judged=true; missNote(n); }
+  });
+  scheduled = scheduled.filter(n=>{
+    if(n.judged && n.time < now-0.4){ n.el.remove(); return false; }
+    return true;
+  });
+  if(running) requestAnimationFrame(animate);
+}
+
+let combo=0, score=0;
+const comboEl=document.getElementById('combo'), scoreEl=document.getElementById('score');
+const feedbackEl=document.getElementById('feedback');
+function setFeedback(m){ feedbackEl.textContent=m; }
+function showJudge(lane,label){
+  const j=document.getElementById('j'+lane); j.textContent=label; j.style.opacity=1;
+  setTimeout(()=>j.style.opacity=0, 220);
+}
+function hit(lane){
+  const now=ctx.currentTime;
+  let best=null, bestDiff=999;
+  scheduled.forEach(n=>{
+    if(n.lane!==lane || n.judged) return;
+    const diff=Math.abs(n.time-now);
+    if(diff<bestDiff){ bestDiff=diff; best=n; }
+  });
+  if(best && bestDiff<0.22){
+    best.judged=true;
+    let label = bestDiff<0.08 ? 'PERFECT' : 'GOOD';
+    combo++; score += (label==='PERFECT'?100:60);
+    showJudge(lane,label);
+    setFeedback(label==='PERFECT' ? '听得准！' : '差不多，再贴紧一点');
+  } else {
+    combo=0; showJudge(lane,'MISS');
