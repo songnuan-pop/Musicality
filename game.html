@@ -288,3 +288,82 @@ function hit(lane){
     setFeedback(label==='PERFECT' ? '听得准！' : '差不多，再贴紧一点');
   } else {
     combo=0; showJudge(lane,'MISS');
+    setFeedback('这一层刚才没响，听听别的层');
+  }
+  comboEl.textContent=combo; scoreEl.textContent=score;
+}
+function missNote(n){ combo=0; comboEl.textContent=combo; showJudge(n.lane,'—'); }
+
+const KEY_LANE={'d':0,'f':1,'j':2,'k':3,'l':4};
+document.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(k in KEY_LANE && running){
+    hit(KEY_LANE[k]);
+    const btn=keyEls[KEY_LANE[k]];
+    btn.classList.add('pressed'); setTimeout(()=>btn.classList.remove('pressed'),100);
+  }
+});
+keyEls.forEach(btn=>{
+  const lane=+btn.dataset.lane;
+  const go=e=>{ e.preventDefault(); if(running) hit(lane); btn.classList.add('pressed'); };
+  const stop=()=>btn.classList.remove('pressed');
+  btn.addEventListener('touchstart',go,{passive:false});
+  btn.addEventListener('touchend',stop);
+  btn.addEventListener('mousedown',go);
+  btn.addEventListener('mouseup',stop);
+  btn.addEventListener('mouseleave',stop);
+});
+
+document.querySelectorAll('.mute').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const lane=+btn.dataset.lane;
+    laneMuted[lane]=!laneMuted[lane];
+    btn.classList.toggle('on', !laneMuted[lane]);
+  });
+});
+
+function applyStyle(key){
+  const s=STYLES[key];
+  PATTERN=s.pattern; SWING=s.swing; BPM=s.bpm; STEP_DUR=60/BPM/4;
+  document.getElementById('bpmSlider').value=BPM;
+  document.getElementById('bpmLabel').textContent=BPM+' bpm';
+  document.getElementById('glow').style.animationDuration=(60/BPM)+'s';
+  document.querySelectorAll('.style-btn').forEach(b=>b.classList.toggle('on', b.dataset.style===key));
+  if(running){
+    scheduled.forEach(n=>n.el.remove()); scheduled=[];
+    currentStep=0; nextStepTime=ctx.currentTime+0.1;
+  }
+}
+document.querySelectorAll('.style-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>applyStyle(btn.dataset.style));
+});
+
+const playBtn=document.getElementById('playBtn');
+playBtn.addEventListener('click', async ()=>{
+  if(ctx.state==='suspended') await ctx.resume();
+  if(!running){
+    running=true; playBtn.textContent='■ 停止';
+    currentStep=0; nextStepTime=ctx.currentTime+0.1;
+    timer=setInterval(scheduler, interval);
+    requestAnimationFrame(animate);
+    setFeedback('跟着耳朵，按对应的层');
+  } else {
+    running=false; playBtn.textContent='▶ 播放';
+    clearInterval(timer);
+    scheduled.forEach(n=>n.el.remove()); scheduled=[];
+    setFeedback('点开始，跟着耳朵按对应层');
+  }
+});
+document.getElementById('guideBtn').addEventListener('click', e=>{
+  guideOn=!guideOn;
+  e.target.textContent = '提示：'+(guideOn?'开':'关');
+  e.target.classList.toggle('on',guideOn);
+});
+document.getElementById('bpmSlider').addEventListener('input', e=>{
+  BPM = +e.target.value; STEP_DUR = 60/BPM/4;
+  document.getElementById('bpmLabel').textContent = BPM+' bpm';
+  document.getElementById('glow').style.animationDuration = (60/BPM)+'s';
+});
+</script>
+</body>
+</html>
